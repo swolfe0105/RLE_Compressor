@@ -1,4 +1,4 @@
 all:
-	gcc main.c compress.c decompress.c -o rle
+	gcc rle-util.c rle-compress.c rle-decompress.c -o rle-util
 
 
