@@ -52,7 +52,7 @@ compress(uint8_t *rBuf, size_t rSize, size_t *wSize)
 
     while (i < rSize+1) {
 
-		/* hack: force end of sequence on last byte */
+		/* force end of sequence on last byte */
 		if (i < rSize){
 			data.cur_byte = rBuf[i++];
 		}else{

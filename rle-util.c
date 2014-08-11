@@ -1,11 +1,11 @@
+#include <string.h>
 #include "rle-util.h"
 
 void show_usage(void);
 
 int main(int argc, char *argv[])
 {
-    int err = 0, fd;
-	int open_flag;
+    int err = 0;
     FILE *rFile, *wFile;
     size_t rSize, wSize;
 
