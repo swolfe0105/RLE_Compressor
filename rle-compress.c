@@ -10,19 +10,12 @@ typedef enum
 } state_t;
 
 
-typedef struct {
-	size_t size;
-	uint8_t *buffer;
-	uint8_t cur_byte;
-	uint8_t prv_byte;	
-} compress_data_t;
+typedef state_t state_func_t( rle_data_t *data );
+static state_t run_state( state_t cur_state, rle_data_t *data ); 
 
-typedef state_t state_func_t( compress_data_t *data );
-static state_t run_state( state_t cur_state, compress_data_t *data ); 
-
-static state_t state_initial( compress_data_t *data );
-static state_t state_normal( compress_data_t *data );
-static state_t state_count( compress_data_t *data );
+static state_t state_initial( rle_data_t *data );
+static state_t state_normal( rle_data_t *data );
+static state_t state_count( rle_data_t *data );
 
 static state_func_t* const state_table[ NUM_STATES ] = {
     state_initial, 
@@ -31,28 +24,28 @@ static state_func_t* const state_table[ NUM_STATES ] = {
 };
 
 
-int write_sequence(compress_data_t *data, uint8_t count);
+int write_run(rle_data_t *data, uint8_t count);
 
-/* compresses a sequence of bytes by using an escaped run length
- * encoding sequence when beneficial.
+/* compresses a byte array used by using run-length
+ * encoding when beneficial.
  *
  * output is returned as a buffer with a length of wSize
  */
 uint8_t *
-compress(uint8_t *rBuf, size_t rSize, size_t *wSize) 
+compress (uint8_t *rBuf, size_t rSize, size_t *wSize) 
 {
 	size_t i = 0;
 	size_t buffer_size = rSize*sizeof(uint8_t);	
 	uint8_t *buffer = malloc(buffer_size);
     state_t cur_state = STATE_INITIAL;
-    compress_data_t data;
+    rle_data_t data;
 
 	data.buffer = buffer;
 	data.size = 0;
 
     while (i < rSize+1) {
 
-		/* force end of sequence on last byte */
+		/* force end of run on last byte */
 		if (i < rSize){
 			data.cur_byte = rBuf[i++];
 		}else{
@@ -60,7 +53,7 @@ compress(uint8_t *rBuf, size_t rSize, size_t *wSize)
 			i++;
 		}
 
-        cur_state = run_state( cur_state, &data );
+        cur_state = run_state(cur_state, &data);
 		data.prv_byte = data.cur_byte;
 
 		if (buffer_size-data.size < 100){
@@ -81,7 +74,7 @@ compress(uint8_t *rBuf, size_t rSize, size_t *wSize)
 
 /* Executes the state function associated with cur_state */
 static state_t 
-run_state( state_t cur_state, compress_data_t *data ) {
+run_state (state_t cur_state, rle_data_t *data) {
     return state_table[ cur_state ]( data );
 };
 
@@ -92,19 +85,19 @@ run_state( state_t cur_state, compress_data_t *data ) {
  * (which does not exist of only one byte is read)
  */
 static state_t 
-state_initial( compress_data_t *data )
+state_initial (rle_data_t *data)
 { 
 	return STATE_NORMAL; 
 } 
 
-static state_t state_normal( compress_data_t *data )
+static state_t state_normal (rle_data_t *data)
 {
 
-	/* a sequence was detected, move to count state to get length */
+	/* a run was detected, move to count state to get length */
 	if (data->prv_byte == data->cur_byte){
 		return STATE_COUNT;
 	}
-	/* no sequence was hit, write bytes individually */
+	/* no run was detected, write bytes individually */
 	else{
 		data->buffer[data->size++] = data->prv_byte;
 
@@ -117,24 +110,24 @@ static state_t state_normal( compress_data_t *data )
 	} 
 }
 
-/* state is called when a two byte sequence has been detected
+/* state is called when a two byte run has been detected
  *
- * If the sequence continues, a counter is incremented
- * If the sequence ends (or count reaches its maximum value),
- * the sequence is written to file and normal state is returned.
+ * If the run continues, a counter is incremented
+ * If the run ends (or count reaches its maximum value),
+ * the run is written to file and normal state is returned.
  */
 static state_t 
-state_count( compress_data_t *data )
+state_count (rle_data_t *data)
 {
-	/* count is always two less than the true sequence length 
+	/* count is always two less than the run length 
 	 * (it is mapped upward to improve compression as
-	 * sequence lengths cannot be smaller than 2) */
+	 * run lengths cannot be smaller than 2) */
 	static uint8_t count = 0;
 
-	/* if at end of sequence is reached or count is filled then
-	 * write sequence to buffer */
+	/* if at end of run is reached or count is filled then
+	 * write run to buffer */
 	if (data->prv_byte != data->cur_byte || count == 0xff){
-		write_sequence(data, count);
+		write_run (data, count);
 		count = 0;
 		return STATE_NORMAL;
 	}
@@ -144,9 +137,9 @@ state_count( compress_data_t *data )
 	}
 }
 
-/* Writes sequence of bytes to buffer */
+/* Writes byte run to buffer */
 int 
-write_sequence(compress_data_t *data, uint8_t count)
+write_run (rle_data_t *data, uint8_t count)
 {
 
 	size_t seq_len = (size_t)count + 2;
@@ -155,7 +148,7 @@ write_sequence(compress_data_t *data, uint8_t count)
     int byte_is_escape = is_escape_char(data->prv_byte);	
     int count_is_escape = is_escape_char(count);	
 
-	/* do not compress 2 or 3 byte non-escape sequences as they 
+	/* do not compress 2 or 3 byte runs as they 
 	 * will be made longer (or same length) from compression */
 	if(!byte_is_escape && seq_len <= 3){
 
@@ -165,11 +158,11 @@ write_sequence(compress_data_t *data, uint8_t count)
 		}
 	} else {
 
-		/* Write escape char to signal start of compressed sequence */
+		/* Write escape char to signal start of compressed runs*/
 		data->buffer[data->size++] = ESCAPE_CHAR;
 
-		/* if count is the same as the escape character, it will appear
-		 * as a double escape to the decodeor. The fix is to decrease
+		/* if count is the same value as the escape character, it will appear
+		 * as a double escape to the decompressor. The fix is to decrease
 		 * the count by one and append the last character afterwards */
 		if(count_is_escape){
 			data->buffer[data->size++] = count-1;

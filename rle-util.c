@@ -1,3 +1,18 @@
+/* RLE Compression Utility
+ * Stephen Wolfe
+ *
+ * This utility uses finite state machines to compress or decompress
+ * files using run-length encoding when beneficial. The compressed runs
+ * are a three byte sequence (1 escape char, 2 data bytes). The first
+ * data byte is the length of the run minus 2. The second is the byte
+ * that the run consisted of.
+ *
+ * e.g.: 
+ * original:     0x?? 0x?? 0x65  0x65 0x65 0x65 0x65 0x?? 0x??
+ * compressed:   0x?? 0x?? <ESC> 0x03 0x65 0x?? 0x??
+ */
+
+
 #include <string.h>
 #include "rle-util.h"
 
