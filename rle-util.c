@@ -18,6 +18,7 @@
 
 void show_usage(void);
 
+/* returns 0 on success, 1 on failure */
 int main(int argc, char *argv[])
 {
     int err = 0;
@@ -37,7 +38,7 @@ int main(int argc, char *argv[])
 		option = OPT_DECOMPRESS;
 	} else {
    		show_usage(); 
-		return 0;
+		return 1;
     }
 
 
@@ -48,41 +49,34 @@ int main(int argc, char *argv[])
 	rSize = ftell(rFile);
 	fseek(rFile, 0, SEEK_SET);
 
-	uint8_t *wBuf; 
+	uint8_t *wBuf = NULL; 
 	uint8_t *rBuf = malloc(rSize); 
 	fread(rBuf, rSize, 1, rFile);
 
     switch(option){
 
     case OPT_COMPRESS:
-
        wBuf = compress(rBuf, rSize, &wSize);
-	   if (!wBuf){
-		   err = 1;
-		   goto label_err;
-	   }
 	   break;
 
     case OPT_DECOMPRESS: 
-
         wBuf = decompress(rBuf, rSize, &wSize);
-		if (!wBuf){
-		   err = 1;
-		   goto label_err;
-		}
 		break;
 
-	default:
-		goto label_err; break;
+	default: break;
     }
 
-	/* write buffer to output file */
-	fwrite(wBuf, 1, wSize, wFile);
+    if (wBuf)
+		/* write buffer to output file */
+		fwrite(wBuf, 1, wSize, wFile);
+	else 
+		err = 1;
+	
 	free(wBuf);
 
-label_err:
     fclose(rFile);
     fclose(wFile);
+
     return err;
 }
 
